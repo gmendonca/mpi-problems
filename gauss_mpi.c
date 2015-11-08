@@ -157,60 +157,8 @@ int main(int argc, char **argv) {
    int i;
  };
 
- void *inner_loop(void * param){
-     //int norm = *((int *) param);
-     struct thread_param* tparam = (struct thread_param*) param;
-     int norm = tparam->norm;
-     int i = tparam->i;
-     //printf("thread = %d\n", norm);
-     float multiplier;
-     int row, col;
-     for (row = norm + i + 1; row < N; row = row + num_threads) {
-         multiplier = A[row][norm] / A[norm][norm];
-         for (col = norm; col < N; col++) {
-             A[row][col] -= A[norm][col] * multiplier;
-         }
-         B[row] -= B[norm] * multiplier;
-     }
-     pthread_exit(0);
- }
 
 void gauss() {
-  int norm, row, col;  /* Normalization row, and zeroing
-			* element row and col */
-  float multiplier;
-
-  pthread_t thread[N];
-
-  printf("Computing Serially.\n");
-
-  /* Gaussian elimination */
-  for (norm = 0; norm < N - 1; norm++) {
-      struct thread_param* param = malloc(num_threads * sizeof(struct thread_param));
-      if ( param == NULL ) {
-          fprintf(stderr, "Couldn't allocate memory for thread.\n");
-          exit(EXIT_FAILURE);
-      }
-
-      int i, j;
-
-      for(i = 0; i < num_threads; i++){
-        param[i].norm = norm;
-        param[i].i = i;
-        pthread_create(&thread[i], NULL, inner_loop, (void*) &param[i]);
-      }
-
-      for (j = 0; j < num_threads; j++) {
-          pthread_join(thread[j], NULL);
-      }
-
-      free(param);
-  }
-
-  /* (Diagonal elements are not normalized to 1.  This is treated in back
-   * substitution.)
-   */
-
 
   /* Back substitution */
   for (row = N - 1; row >= 0; row--) {
@@ -235,55 +183,40 @@ void Get_data(
 
     MPI_Status status;
 
+    int i;
 
     if (my_rank == 0){
-
-        *a_ptr = A;
-        *b_ptr = B;
-        *n_ptr = N;
-
-        for (dest = 1; dest < p; dest++){
-
-            tag = 0;
-
-            MPI_Send(a_ptr, 1, MPI_FLOAT, dest, tag,
-
-                MPI_COMM_WORLD);
-
-            tag = 1;
-
-            MPI_Send(b_ptr, 1, MPI_FLOAT, dest, tag,
-
-                MPI_COMM_WORLD);
-
-            tag = 2;
-
-            MPI_Send(n_ptr, 1, MPI_INT, dest, tag,
-
-                MPI_COMM_WORLD);
-
+        for (dest = 0; dest < N - 1; dest++) {
+            for(i = 0; i < p; i++) {
+                MPI_Send(A[i], N - 1, MPI_INT, dest, i, MPI_COMM_WORLD);
+                MPI_Send(&B[i], 1, MPI_INT, dest, i + N - 1, MPI_COMM_WORLD);
+            }
         }
-
     } else {
-
-        tag = 0;
-
-        MPI_Recv(a_ptr, 1, MPI_FLOAT, source, tag,
-
-            MPI_COMM_WORLD, &status);
-
-        tag = 1;
-
-        MPI_Recv(b_ptr, 1, MPI_FLOAT, source, tag,
-
-            MPI_COMM_WORLD, &status);
-
-        tag = 2;
-
-        MPI_Recv(n_ptr, 1, MPI_INT, source, tag,
-
-                MPI_COMM_WORLD, &status);
-
+        for(i = 0; i < p; i++) {
+            MPI_Recv(A[i], N - 1, MPI_FLOAT, source, i, MPI_COMM_WORLD, &status);
+            MPI_Recv(&B[i], 1, MPI_FLOAT, source, i + N - 1, MPI_COMM_WORLD, &status);
+        }
     }
 
 } /* Get_data */
+
+void Inner_loop(
+    int  norm      /* in */,
+
+    int  my_rank   /* in */,
+
+    int  p         /* in */){
+
+        //printf("thread = %d\n", norm);
+        float multiplier;
+        int row, col;
+        for (row = norm + my_rank + 1; row < N; row = row + p) {
+            multiplier = A[row][norm] / A[norm][norm];
+            for (col = norm; col < N; col++) {
+                A[row][col] -= A[norm][col] * multiplier;
+            }
+            B[row] -= B[norm] * multiplier;
+        }
+
+}
