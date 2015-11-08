@@ -1,10 +1,3 @@
-/* Gaussian elimination without pivoting.
- * Compile with "gcc gauss.c"
- */
-
-/* ****** ADD YOUR CODE AT THE END OF THIS FILE. ******
- * You need not submit the provided code.
- */
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -29,11 +22,6 @@ volatile float A[MAXN][MAXN], B[MAXN], X[MAXN];
 /* junk */
 #define randm() 4|2[uid]&3
 
-/* Prototype */
-void gauss();  /* The function you will provide.
-		* It is this routine that is timed.
-		* It is called only on the parent.
-		*/
 
 /* returns a seed for srand based on the time */
 unsigned int time_seed() {
@@ -97,15 +85,67 @@ int main(int argc, char **argv) {
   unsigned long long usecstart, usecstop;
   struct tms cputstart, cputstop;  /* CPU times for my processes */
 
-  /* Process program parameters */
-  parameters(argc, argv);
+  int         my_rank;   /* My process rank           */
 
-  /* Initialize A and B */
-  initialize_inputs();
+  int         p;         /* The number of processes   */
+
+  int         norm;      /* The number of rows        */
+
+  int         row;       /* Row number                */
+
+  int         col;       /* Column number             */
+
+  int         source;    /* Process sending matrices  */
+
+  int         dest = 0;  /* All messages go to 0      */
+
+  MPI_Status  status;
+
+  void Get_data(int my_rank, int p);
+
+  void Compute(int norm, int my_rank, int p);
+
+  /* Let the system do what it needs to start up MPI */
+
+  MPI_Init(&argc, &argv);
+
+  /* Get my process rank */
+
+  MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+  /* Find out how many processes are being used */
+
+  MPI_Comm_size(MPI_COMM_WORLD, &p);
+
+  if(my_rank = 0){
+      /* Process program parameters */
+      parameters(argc, argv);
+
+      /* Initialize A and B */
+      initialize_inputs();
+
+      /* Broadcast N */
+      MPI_Bcast(&N, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  } else {
+
+      /* Getting N */
+      MPI_Bcast(&N, 1, MPI_INT, 0, MPI_COMM_WORLD);
+
+      Get_data(my_rank, p);
+
+      /* Gaussian elimination */
+      for (norm = 0; norm < N - 1; norm++) {
+
+          Inner_loop(norm, my_rank, p);
+
+          MPI_Barrier(MPI_COMM_WORLD);
+      }
+
+  }
 
 
 
-  
+
 
   exit(0);
 }
