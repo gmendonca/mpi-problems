@@ -7,60 +7,20 @@
 #include <sys/times.h>
 #include <sys/time.h>
 #include <time.h>
-#include <pthread.h>
 
 #include <mpi.h>
 
 /* Program Parameters */
 #define MAXN 2000  /* Max value of N */
-int N = 2000;  /* Matrix size */
+int N=50;  /* Matrix size */
 
 /* Matrices and vectors */
-volatile float A[MAXN][MAXN], B[MAXN], X[MAXN];
+float A[MAXN][MAXN], B[MAXN], X[MAXN];
 /* A * X = B, solve for X */
 
 /* junk */
 #define randm() 4|2[uid]&3
 
-
-/* returns a seed for srand based on the time */
-unsigned int time_seed() {
-    struct timeval t;
-    struct timezone tzdummy;
-
-    gettimeofday(&t, &tzdummy);
-    return (unsigned int)(t.tv_usec);
-}
-
-/* Set the program parameters from the command-line arguments */
-void parameters(int argc, char **argv) {
-    int seed = 0;  /* Random seed */
-    char uid[32]; /*User name */
-
-    /* Read command-line arguments */
-    srand(time_seed());  /* Randomize */
-
-    if (argc == 3) {
-        seed = atoi(argv[2]);
-        srand(seed);
-        printf("Random seed = %i\n", seed);
-    }
-    if (argc >= 2) {
-        N = atoi(argv[1]);
-        if (N < 1 || N > MAXN) {
-            printf("N = %i is out of range.\n", N);
-            exit(0);
-        }
-    }
-    else {
-        printf("Usage: %s <matrix_dimension> [random seed]\n",
-        argv[0]);
-        exit(0);
-    }
-
-    /* Print parameters */
-    printf("\nMatrix dimension N = %i.\n", N);
-}
 
 /* Initialize A and B (and X to 0.0s) */
 void initialize_inputs() {
@@ -103,57 +63,61 @@ int main(int argc, char **argv) {
 
     MPI_Init(&argc, &argv);
 
+    /* Process program parameters */
+    srand(5);
+
     /* Get my process rank */
 
     MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+    //printf("My rank = %d\n", my_rank);
 
     /* Find out how many processes are being used */
 
     MPI_Comm_size(MPI_COMM_WORLD, &p);
 
+    //printf("My p = %d\n", p);
+
     double startTime, stopTime;
 
-    if(my_rank = 0) {
+    if(my_rank == 0) {
+
         /* Start Clock */
         printf("\nStarting clock.\n");
         startTime = MPI_Wtime();
 
-        /* Process program parameters */
-        parameters(argc, argv);
+        /* Broadcast N */
+        MPI_Bcast(&N, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
         /* Initialize A and B */
         initialize_inputs();
-
-        /* Broadcast N */
-        MPI_Bcast(&N, 1, MPI_INT, 0, MPI_COMM_WORLD);
     } else {
 
         /* Getting N */
         MPI_Bcast(&N, 1, MPI_INT, 0, MPI_COMM_WORLD);
+    }
+    Get_data(my_rank, p);
 
-        Get_data(my_rank, p);
+    /* Gaussian elimination */
+    for (norm = 0; norm < N - 1; norm++) {
 
-        /* Gaussian elimination */
-        for (norm = 0; norm < N - 1; norm++) {
-
-            int i;
-            for (i = norm; i < N; i++) {
-                MPI_Bcast(A[i], N, MPI_FLOAT, i%p, MPI_COMM_WORLD);
-                MPI_Bcast(&B[i], 1, MPI_FLOAT, i%p, MPI_COMM_WORLD);
-            }
-
-            Inner_loop(norm, my_rank, p);
-
-            MPI_Barrier(MPI_COMM_WORLD);
+        int i;
+        for (i = norm; i < N; i++) {
+            MPI_Bcast(A[i], N, MPI_FLOAT, i%p, MPI_COMM_WORLD);
+            MPI_Bcast(&B[i], 1, MPI_FLOAT, i%p, MPI_COMM_WORLD);
         }
 
+        Inner_loop(norm, my_rank, p);
+
+        MPI_Barrier(MPI_COMM_WORLD);
     }
 
+
+
+    MPI_Bcast(A[N-1], N, MPI_FLOAT, (N-1)%p, MPI_COMM_WORLD);
+    MPI_Bcast(&B[N-1], 1, MPI_FLOAT, (N-1)%p, MPI_COMM_WORLD);
+
     if (my_rank == 0) {
-
-        MPI_Bcast(A[N-1], N, MPI_FLOAT, (N-1)%p, MPI_COMM_WORLD);
-        MPI_Bcast(&B[N-1], 1, MPI_FLOAT, (N-1)%p, MPI_COMM_WORLD);
-
         /* Back substitution */
 
         for (row = N - 1; row >= 0; row--) {
@@ -190,22 +154,21 @@ void Get_data(
 
         MPI_Status status;
 
-        int i;
 
         if (my_rank == 0){
-            for(i = 1; i < N; i++) {
+            for(int i = 0; i < N; i++) {
                 dest = i%p;
-                if (dest != 0) {
-                    MPI_Send(A[i], N - 1, MPI_FLOAT, dest, i, MPI_COMM_WORLD);
-                    MPI_Send(&B[i], 1, MPI_FLOAT, dest, i + N - 1, MPI_COMM_WORLD);
+                if(dest != 0){
+                    MPI_Send(A[i], N, MPI_FLOAT, dest, i, MPI_COMM_WORLD);
+                    MPI_Send(&B[i], 1, MPI_FLOAT, dest, i + N, MPI_COMM_WORLD);
                 }
             }
         } else {
-            for(i = 0; i < N; i++) {
+            for(int i = 0; i < N; i++) {
                 dest = i%p;
-                if (dest == my_rank) {
-                    MPI_Recv(A[i], N - 1, MPI_FLOAT, source, i, MPI_COMM_WORLD, &status);
-                    MPI_Recv(&B[i], 1, MPI_FLOAT, source, i + N - 1, MPI_COMM_WORLD, &status);
+                if(dest == my_rank){
+                    MPI_Recv(A[i], N, MPI_FLOAT, source, i, MPI_COMM_WORLD, &status);
+                    MPI_Recv(&B[i], 1, MPI_FLOAT, source, i + N, MPI_COMM_WORLD, &status);
                 }
             }
         }
@@ -224,7 +187,7 @@ void Get_data(
 
             int row, col;
             for (row = norm + 1; row < N; row++) {
-                if (row % p == my_rank) {
+                if(row % p == my_rank) {
                     multiplier = A[row][norm] / A[norm][norm];
                     for (col = norm; col < N; col++) {
                         A[row][col] -= A[norm][col] * multiplier;
