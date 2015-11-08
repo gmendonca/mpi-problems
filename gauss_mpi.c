@@ -13,7 +13,7 @@
 
 /* Program Parameters */
 #define MAXN 2000  /* Max value of N */
-int N;  /* Matrix size */
+int N = 2000;  /* Matrix size */
 
 /* Matrices and vectors */
 volatile float A[MAXN][MAXN], B[MAXN], X[MAXN];
@@ -78,12 +78,6 @@ void initialize_inputs() {
 }
 
 int main(int argc, char **argv) {
-    /* Timing variables */
-    struct timeval etstart, etstop;  /* Elapsed times using gettimeofday() */
-    struct timezone tzdummy;
-    clock_t etstart2, etstop2;  /* Elapsed times using times() */
-    unsigned long long usecstart, usecstop;
-    struct tms cputstart, cputstop;  /* CPU times for my processes */
 
     int         my_rank;   /* My process rank           */
 
@@ -103,7 +97,7 @@ int main(int argc, char **argv) {
 
     void Get_data(int my_rank, int p);
 
-    void Compute(int norm, int my_rank, int p);
+    void Inner_loop(int norm, int my_rank, int p);
 
     /* Let the system do what it needs to start up MPI */
 
@@ -117,12 +111,13 @@ int main(int argc, char **argv) {
 
     MPI_Comm_size(MPI_COMM_WORLD, &p);
 
-    /* Start Clock */
-    printf("\nStarting clock.\n");
-    gettimeofday(&etstart, &tzdummy);
-    etstart2 = times(&cputstart);
+    double startTime, stopTime;
 
-    if(my_rank = 0){
+    if(my_rank = 0) {
+        /* Start Clock */
+        printf("\nStarting clock.\n");
+        startTime = MPI_Wtime();
+
         /* Process program parameters */
         parameters(argc, argv);
 
@@ -141,6 +136,12 @@ int main(int argc, char **argv) {
         /* Gaussian elimination */
         for (norm = 0; norm < N - 1; norm++) {
 
+            int i;
+            for (i = norm; i < N; i++) {
+                MPI_Bcast(A[i], N, MPI_FLOAT, i%p, MPI_COMM_WORLD);
+                MPI_Bcast(&B[i], 1, MPI_FLOAT, i%p, MPI_COMM_WORLD);
+            }
+
             Inner_loop(norm, my_rank, p);
 
             MPI_Barrier(MPI_COMM_WORLD);
@@ -150,7 +151,8 @@ int main(int argc, char **argv) {
 
     if (my_rank == 0) {
 
-        int row, col;
+        MPI_Bcast(A[N-1], N, MPI_FLOAT, (N-1)%p, MPI_COMM_WORLD);
+        MPI_Bcast(&B[N-1], 1, MPI_FLOAT, (N-1)%p, MPI_COMM_WORLD);
 
         /* Back substitution */
 
@@ -161,52 +163,18 @@ int main(int argc, char **argv) {
             }
             X[row] /= A[row][row];
         }
+
+        /* Stop Clock */
+        stopTime = MPI_Wtime();
+
+        printf("\nElapsed time = %lf ms.\n",(stopTime - startTime));
+        printf("--------------------------------------------\n");
     }
 
     MPI_Finalize();
 
-    /* Stop Clock */
-    gettimeofday(&etstop, &tzdummy);
-    etstop2 = times(&cputstop);
-    printf("Stopped clock.\n");
-    usecstart = (unsigned long long)etstart.tv_sec * 1000000 + etstart.tv_usec;
-    usecstop = (unsigned long long)etstop.tv_sec * 1000000 + etstop.tv_usec;
-
-    printf("\nElapsed time = %g ms.\n",
-    (float)(usecstop - usecstart)/(float)1000);
-
-    printf("(CPU times are accurate to the nearest %g ms)\n",
-    1.0/(float)CLOCKS_PER_SEC * 1000.0);
-    printf("My total CPU time for parent = %g ms.\n",
-    (float)( (cputstop.tms_utime + cputstop.tms_stime) -
-    (cputstart.tms_utime + cputstart.tms_stime) ) /
-    (float)CLOCKS_PER_SEC * 1000);
-    printf("My system CPU time for parent = %g ms.\n",
-    (float)(cputstop.tms_stime - cputstart.tms_stime) /
-    (float)CLOCKS_PER_SEC * 1000);
-    printf("My total CPU time for child processes = %g ms.\n",
-    (float)( (cputstop.tms_cutime + cputstop.tms_cstime) -
-    (cputstart.tms_cutime + cputstart.tms_cstime) ) /
-    (float)CLOCKS_PER_SEC * 1000);
-    /* Contrary to the man pages, this appears not to include the parent */
-    printf("--------------------------------------------\n");
-
-
-
     exit(0);
 
-}
-
-void gauss() {
-
-    /* Back substitution */
-    for (row = N - 1; row >= 0; row--) {
-        X[row] = B[row];
-        for (col = N-1; col > row; col--) {
-            X[row] -= A[row][col] * X[col];
-        }
-        X[row] /= A[row][row];
-    }
 }
 
 void Get_data(
@@ -225,16 +193,20 @@ void Get_data(
         int i;
 
         if (my_rank == 0){
-            for (dest = 0; dest < N - 1; dest++) {
-                for(i = 0; i < p; i++) {
-                    MPI_Send(A[i], N - 1, MPI_INT, dest, i, MPI_COMM_WORLD);
-                    MPI_Send(&B[i], 1, MPI_INT, dest, i + N - 1, MPI_COMM_WORLD);
+            for(i = 1; i < N; i++) {
+                dest = i%p;
+                if (dest != 0) {
+                    MPI_Send(A[i], N - 1, MPI_FLOAT, dest, i, MPI_COMM_WORLD);
+                    MPI_Send(&B[i], 1, MPI_FLOAT, dest, i + N - 1, MPI_COMM_WORLD);
                 }
             }
         } else {
-            for(i = 0; i < p; i++) {
-                MPI_Recv(A[i], N - 1, MPI_FLOAT, source, i, MPI_COMM_WORLD, &status);
-                MPI_Recv(&B[i], 1, MPI_FLOAT, source, i + N - 1, MPI_COMM_WORLD, &status);
+            for(i = 0; i < N; i++) {
+                dest = i%p;
+                if (dest == my_rank) {
+                    MPI_Recv(A[i], N - 1, MPI_FLOAT, source, i, MPI_COMM_WORLD, &status);
+                    MPI_Recv(&B[i], 1, MPI_FLOAT, source, i + N - 1, MPI_COMM_WORLD, &status);
+                }
             }
         }
 
@@ -249,13 +221,15 @@ void Get_data(
 
             //printf("thread = %d\n", norm);
             float multiplier;
-            int row, col;
-            for (row = norm + my_rank + 1; row < N; row = row + p) {
-                multiplier = A[row][norm] / A[norm][norm];
-                for (col = norm; col < N; col++) {
-                    A[row][col] -= A[norm][col] * multiplier;
-                }
-                B[row] -= B[norm] * multiplier;
-            }
 
+            int row, col;
+            for (row = norm + 1; row < N; row++) {
+                if (row % p == my_rank) {
+                    multiplier = A[row][norm] / A[norm][norm];
+                    for (col = norm; col < N; col++) {
+                        A[row][col] -= A[norm][col] * multiplier;
+                    }
+                    B[row] -= B[norm] * multiplier;
+                }
+            }
         }
