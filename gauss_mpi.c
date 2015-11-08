@@ -105,58 +105,10 @@ int main(int argc, char **argv) {
 
 
 
-  /* Start Clock */
-  printf("\nStarting clock.\n");
-  gettimeofday(&etstart, &tzdummy);
-  etstart2 = times(&cputstart);
-
-  /* Gaussian Elimination */
-  gauss();
-
-  /* Stop Clock */
-  gettimeofday(&etstop, &tzdummy);
-  etstop2 = times(&cputstop);
-  printf("Stopped clock.\n");
-  usecstart = (unsigned long long)etstart.tv_sec * 1000000 + etstart.tv_usec;
-  usecstop = (unsigned long long)etstop.tv_sec * 1000000 + etstop.tv_usec;
-
-
-
-  /* Display timing results */
-  printf("\nElapsed time = %g ms.\n",
-	 (float)(usecstop - usecstart)/(float)1000);
-
-  printf("(CPU times are accurate to the nearest %g ms)\n",
-	 1.0/(float)CLOCKS_PER_SEC * 1000.0);
-  printf("My total CPU time for parent = %g ms.\n",
-	 (float)( (cputstop.tms_utime + cputstop.tms_stime) -
-		  (cputstart.tms_utime + cputstart.tms_stime) ) /
-	 (float)CLOCKS_PER_SEC * 1000);
-  printf("My system CPU time for parent = %g ms.\n",
-	 (float)(cputstop.tms_stime - cputstart.tms_stime) /
-	 (float)CLOCKS_PER_SEC * 1000);
-  printf("My total CPU time for child processes = %g ms.\n",
-	 (float)( (cputstop.tms_cutime + cputstop.tms_cstime) -
-		  (cputstart.tms_cutime + cputstart.tms_cstime) ) /
-	 (float)CLOCKS_PER_SEC * 1000);
-      /* Contrary to the man pages, this appears not to include the parent */
-  printf("--------------------------------------------\n");
+  
 
   exit(0);
 }
-
-/* ------------------ Above Was Provided --------------------- */
-
-/****** You will replace this routine with your own parallel version *******/
-/* Provided global variables are MAXN, N, A[][], B[], and X[],
- * defined in the beginning of this code.  X[] is initialized to zeros.
- */
-
- struct thread_param{
-   int norm;
-   int i;
- };
-
 
 void gauss() {
 
