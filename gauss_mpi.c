@@ -12,7 +12,7 @@
 
 /* Program Parameters */
 #define MAXN 2000  /* Max value of N */
-int N=50;  /* Matrix size */
+int N=1000;  /* Matrix size */
 
 /* Matrices and vectors */
 float A[MAXN][MAXN], B[MAXN], X[MAXN];
@@ -35,6 +35,35 @@ void initialize_inputs() {
         X[col] = 0.0;
     }
 
+}
+
+/* Print input matrices */
+void print_inputs() {
+  int row, col;
+
+  if (N < 10) {
+    printf("\nA =\n\t");
+    for (row = 0; row < N; row++) {
+      for (col = 0; col < N; col++) {
+	printf("%5.2f%s", A[row][col], (col < N-1) ? ", " : ";\n\t");
+      }
+    }
+    printf("\nB = [");
+    for (col = 0; col < N; col++) {
+      printf("%5.2f%s", B[col], (col < N-1) ? "; " : "]\n");
+    }
+  }
+}
+
+void print_X() {
+  int row;
+
+  if (N < 100) {
+    printf("\nX = [");
+    for (row = 0; row < N; row++) {
+      printf("%5.2f%s", X[row], (row < N-1) ? "; " : "]\n");
+    }
+  }
 }
 
 int main(int argc, char **argv) {
@@ -64,7 +93,7 @@ int main(int argc, char **argv) {
     MPI_Init(&argc, &argv);
 
     /* Process program parameters */
-    srand(5);
+    //srand(5);
 
     /* Get my process rank */
 
@@ -81,6 +110,10 @@ int main(int argc, char **argv) {
     double startTime, stopTime;
 
     if(my_rank == 0) {
+        /* Initialize A and B */
+        initialize_inputs();
+
+        print_inputs();
 
         /* Start Clock */
         printf("\nStarting clock.\n");
@@ -89,8 +122,7 @@ int main(int argc, char **argv) {
         /* Broadcast N */
         MPI_Bcast(&N, 1, MPI_INT, 0, MPI_COMM_WORLD);
 
-        /* Initialize A and B */
-        initialize_inputs();
+
     } else {
 
         /* Getting N */
@@ -106,13 +138,10 @@ int main(int argc, char **argv) {
             MPI_Bcast(A[i], N, MPI_FLOAT, i%p, MPI_COMM_WORLD);
             MPI_Bcast(&B[i], 1, MPI_FLOAT, i%p, MPI_COMM_WORLD);
         }
-
         Inner_loop(norm, my_rank, p);
 
         MPI_Barrier(MPI_COMM_WORLD);
     }
-
-
 
     MPI_Bcast(A[N-1], N, MPI_FLOAT, (N-1)%p, MPI_COMM_WORLD);
     MPI_Bcast(&B[N-1], 1, MPI_FLOAT, (N-1)%p, MPI_COMM_WORLD);
@@ -131,14 +160,15 @@ int main(int argc, char **argv) {
         /* Stop Clock */
         stopTime = MPI_Wtime();
 
-        printf("\nElapsed time = %lf ms.\n",(stopTime - startTime));
+        printf("\nElapsed time = %lf s.\n",(stopTime - startTime));
         printf("--------------------------------------------\n");
+
+        print_X();
     }
 
     MPI_Finalize();
 
     exit(0);
-
 }
 
 void Get_data(
@@ -154,9 +184,9 @@ void Get_data(
 
         MPI_Status status;
 
-
+        int i;
         if (my_rank == 0){
-            for(int i = 0; i < N; i++) {
+            for(i = 0; i < N; i++) {
                 dest = i%p;
                 if(dest != 0){
                     MPI_Send(A[i], N, MPI_FLOAT, dest, i, MPI_COMM_WORLD);
@@ -164,7 +194,7 @@ void Get_data(
                 }
             }
         } else {
-            for(int i = 0; i < N; i++) {
+            for(i = 0; i < N; i++) {
                 dest = i%p;
                 if(dest == my_rank){
                     MPI_Recv(A[i], N, MPI_FLOAT, source, i, MPI_COMM_WORLD, &status);
