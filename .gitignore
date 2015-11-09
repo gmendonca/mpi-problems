@@ -1,2 +1,5 @@
 .DS_Store
 *.o
+get_data
+get_data_modified
+gauss_mpi

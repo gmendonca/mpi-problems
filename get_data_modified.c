@@ -47,7 +47,7 @@
 
 /////////////////
 
-main(int argc, char** argv) {
+int main(int argc, char** argv) {
 
     int         my_rank;   /* My process rank           */
 
