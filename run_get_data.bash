@@ -1,3 +1,3 @@
 #!/bin/bash
 
-mpirun –npernode 8 ./get_data
+mpirun -n 8 ./get_data
