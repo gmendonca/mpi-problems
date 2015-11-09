@@ -124,10 +124,10 @@ int main(int argc, char **argv) {
 
 
     } else {
-
         /* Getting N */
         MPI_Bcast(&N, 1, MPI_INT, 0, MPI_COMM_WORLD);
     }
+    
     Get_data(my_rank, p);
 
     /* Gaussian elimination */
