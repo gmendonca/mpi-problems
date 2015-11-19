@@ -15,4 +15,4 @@ program: gauss_mpi.c get_data.c get_data_modified.c
 	 $(MPICC) -o get_data_modified get_data_modified.o
 
 clean:
-	rm -rf *.out
+	rm -rf *.o
